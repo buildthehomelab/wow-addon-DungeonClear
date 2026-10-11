@@ -3,10 +3,13 @@
 > ## ⚠️ The AddOns folder **must** be named `DungeonClear`
 >
 > Cloning or downloading this repo gives you a folder named
-> `mod-dungeon-clear-addon`. The client will **not** load it under that name —
+> `wow-addon-DungeonClear`. The client will **not** load it under that name —
 > the folder inside `Interface/AddOns/` has to be exactly `DungeonClear` (with
 > `DungeonClear.toc` and `DungeonClear.lua` directly inside it). Rename it after
 > copying. See [Installation](#installation) below.
+
+> This is a fork of [jrad7/mod-dungeon-clear-addon](https://github.com/jrad7/mod-dungeon-clear-addon)
+> with fixes; see [Patch Notes](#patch-notes-dungeon-clear-panel-fixes).
 
 A simple in-game panel for **World of Warcraft 3.3.5a** that lets you send a
 party's bot tank through a dungeon and watch its progress, instead of typing
@@ -184,8 +187,9 @@ If you'd rather type, every button has a command:
 
 ## Troubleshooting
 
-- **Buttons do nothing / "You must be in a party."** You need a party with a
-  mod-playerbots tank bot in it. The addon only relays your commands to that bot.
+- **"No tank bot found in your group."** You need a party with a mod-playerbots
+  tank bot in it, on the same map as you. The addon only relays your commands
+  to that bot.
 - **Boss list stuck on "Loading boss list...".** The tank isn't fully inside the
   instance yet, or there's no tank bot in the group. It fills in on its own once
   the server responds. If it never does, check that the server has
@@ -198,6 +202,23 @@ If you'd rather type, every button has a command:
 - **You can't drive the tank if you're playing it yourself.** Dungeon clear
   controls a tank *bot*, so the tank has to be a bot — or your own character in
   self-bot mode. See the module README.
+
+## Patch Notes: Dungeon Clear Panel Fixes
+Category: Addons
+
+- Fixed an issue where a refused **Spectate** click, or any other server
+  refusal, was reported as "Tank bot is no longer in the group" and switched
+  the panel to OFF while the clear kept running.
+- The panel now tells you why a button did nothing, for example when there is
+  no tank bot in your group or you are dead.
+- Fixed an issue where **Reset Camera** could start a camera instead of ending
+  one, and could not end the follow camera outside a dungeon. It now ends
+  either camera in one step.
+- Fixed an issue where the **Settings** page showed the server defaults instead
+  of your saved settings whenever no tank bot was in your party. **Default** and
+  **Reset All to Default** now update the page straight away.
+- Your saved settings are now applied when a tank bot joins after you are
+  already inside the dungeon.
 
 ## License
 
