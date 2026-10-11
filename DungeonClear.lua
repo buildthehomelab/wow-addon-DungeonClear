@@ -58,11 +58,16 @@ local spectateResetBtn         -- ends the camera and hands control back to you
 --   "free"    free-flying camera
 --   "follow"  riding a bot
 --
--- The distinction earns its keep in the reset: a bare `spectate` toggles the
--- mode you are IN, so ending the follow cam takes two (the first only hands over
--- to the free camera) while the free camera ends on one. Knowing which we are in
--- is what makes one click enough without ever sending a toggle too many.
+-- The distinction earns its keep in the reset: each mode ends with its own
+-- toggle (`spectate follow` for the follow cam, a bare `spectate` for the free
+-- one), and the other mode's toggle would switch cameras instead of ending one.
 local cameraState = false
+-- The last camera command sent and the state it left, kept so a server refusal
+-- (which arrives as an ERROR, see OnCameraRefused) can undo the optimistic
+-- state change instead of leaving the panel believing in a camera that never
+-- started.
+local pendingCamera = nil
+local SendCameraCommand        -- sends a spectate command and records the above
 local UpdateResetBtnState      -- greys the reset button in/out with the state
 local SetCameraState           -- single place that moves cameraState
 local RefreshStatusHeight      -- re-measure the Warning row, then resize to fit
@@ -533,7 +538,18 @@ end
 -- accepts it (IsDcAddonCommand). Bot commands sent this way still need a tank
 -- bot in the sender's group and are refused server-side with that reason, which
 -- is a truer error than a client-side guess.
+--
+-- `silent` marks a command the player did not just click for: a background
+-- re-push of saved settings, or a settings-panel change that is saved locally
+-- and re-applied at run start anyway. Everything else (bar the "addon" polls)
+-- stamps lastUserCmdAt, which is how the ERROR handler tells a refusal the
+-- player is waiting on from one a background poll provoked.
+local lastUserCmdAt = -1000
 local function SendDcCommand(subCmd, param, silent)
+    if not silent and param ~= "addon" then
+        lastUserCmdAt = GetTime()
+    end
+
     local inRaid = GetNumRaidMembers() and GetNumRaidMembers() > 0
     local inParty = GetNumPartyMembers() and GetNumPartyMembers() > 0
 
@@ -644,13 +660,13 @@ spectateBtn:SetText("Spectate")
 spectateBtn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
 spectateBtn:SetScript("OnClick", function(self, button)
     if button == "RightButton" or IsShiftKeyDown() then
-        SendDcCommand("spectate", "follow")
+        SendCameraCommand("follow")
         SetCameraState("follow")
     else
         -- A bare toggle means different things from different seats: from no
         -- camera it starts the free one, from the follow cam it hands over TO
         -- the free one, and only from the free camera does it actually end.
-        SendDcCommand("spectate")
+        SendCameraCommand()
         if cameraState == "free" then
             SetCameraState(false)
         else
@@ -705,7 +721,7 @@ spectatePrevBtn:SetSize(30, 24)
 spectatePrevBtn:SetPoint("LEFT", spectateBtn, "RIGHT", 6, 0)
 spectatePrevBtn:SetText("|cffffd100<|r")
 spectatePrevBtn:SetScript("OnClick", function()
-    SendDcCommand("spectate", "prev")
+    SendCameraCommand("prev")
     SetCameraState("follow")  -- cycling from cold starts a follow cam too
 end)
 spectatePrevBtn:SetScript("OnEnter", function(self)
@@ -722,7 +738,7 @@ spectateNextBtn:SetSize(30, 24)
 spectateNextBtn:SetPoint("LEFT", spectatePrevBtn, "RIGHT", 4, 0)
 spectateNextBtn:SetText("|cffffd100>|r")
 spectateNextBtn:SetScript("OnClick", function()
-    SendDcCommand("spectate", "next")
+    SendCameraCommand("next")
     SetCameraState("follow")
 end)
 spectateNextBtn:SetScript("OnEnter", function(self)
@@ -765,18 +781,10 @@ end
 -- until something first moved the camera.
 UpdateResetBtnState()
 
--- Ending the follow cam takes two toggles, and they cannot go out back to back:
--- the first has to reach the server and hand the camera over before the second
--- means anything. So the reset sends one now and queues this one a second later.
-local secondToggle = CreateFrame("Frame")
-local secondElapsed = 0
-secondToggle:Hide()
-secondToggle:SetScript("OnUpdate", function(self, elap)
-    secondElapsed = secondElapsed + elap
-    if secondElapsed < 1.0 then return end
-    self:Hide()
-    SendDcCommand("spectate")
-end)
+SendCameraCommand = function(param)
+    pendingCamera = { prev = cameraState, cmd = param, at = GetTime() }
+    SendDcCommand("spectate", param)
+end
 
 spectateResetBtn:SetScript("OnClick", function()
     -- The whole contract of this button: it always leaves the camera on your own
@@ -785,14 +793,40 @@ spectateResetBtn:SetScript("OnClick", function()
     -- all. Same rule the greying-out uses, belt and braces.
     if cameraState == false then return end
 
-    -- Only the follow cam needs the follow-up; from the free camera a second
-    -- toggle would switch a fresh camera back on.
-    local needsSecond = (cameraState == "follow")
+    -- Each mode ends in one step with its own toggle: `spectate follow` ends
+    -- the follow cam, a bare `spectate` ends the free one. A bare toggle from
+    -- the follow cam would hand over to the free camera instead, which the
+    -- server refuses outside a dungeon -- leaving the follow cam running.
+    if cameraState == "follow" then
+        SendCameraCommand("follow")
+    else
+        SendCameraCommand()
+    end
     SetCameraState(false)
-    SendDcCommand("spectate")
-    secondElapsed = 0
-    if needsSecond then secondToggle:Show() end
 end)
+
+-- The server refused a camera command. The buttons moved cameraState when they
+-- sent it, so put it back to what the server is actually left with:
+--   "follow" refused   the server ends any running camera before it checks the
+--                      follow target, so nothing is running now
+--   anything else      the refusal came before any change (a toggle that could
+--                      not start, a cycle with no other bot), so the state the
+--                      command left still stands
+-- Returns true when the error was a camera refusal.
+local CAMERA_REPLY_WINDOW = 3.0
+local function OnCameraRefused(reason)
+    local p = pendingCamera
+    if not p or (GetTime() - p.at) > CAMERA_REPLY_WINDOW then return false end
+    pendingCamera = nil
+    if string.find(reason, "^Already watching") then
+        SetCameraState("follow")
+    elseif p.cmd == "follow" then
+        SetCameraState(false)
+    else
+        SetCameraState(p.prev)
+    end
+    return true
+end
 
 spectateResetBtn:SetScript("OnEnter", function(self)
     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
@@ -1461,7 +1495,9 @@ eventFrame:RegisterEvent("ADDON_LOADED")
 eventFrame:RegisterEvent("CHAT_MSG_ADDON")
 eventFrame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
 eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
-eventFrame:RegisterEvent("GROUP_ROSTER_UPDATE")
+-- The 3.3.5a roster events (GROUP_ROSTER_UPDATE only exists from 5.0 on).
+eventFrame:RegisterEvent("PARTY_MEMBERS_CHANGED")
+eventFrame:RegisterEvent("RAID_ROSTER_UPDATE")
 eventFrame:RegisterEvent("PLAYER_REGEN_DISABLED")
 eventFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
 -- Corrective only, for the camera state the addon models from its own commands:
@@ -1509,6 +1545,49 @@ local function OnUpdateHandler(self, elap)
     end
 end
 frame:SetScript("OnUpdate", OnUpdateHandler)
+
+-- Server refusals reach chat only as the answer to something the player just
+-- did (see SendDcCommand), and one press can draw the same answer several times
+-- over (On also re-pushes every saved setting), so repeats are folded.
+local USER_REPLY_WINDOW = 3.0
+local lastErrorText, lastErrorAt = nil, 0
+local function PrintError(text)
+    local now = GetTime()
+    if text == lastErrorText and (now - lastErrorAt) < 5.0 then return end
+    lastErrorText, lastErrorAt = text, now
+    DEFAULT_CHAT_FRAME:AddMessage("|cffff3333[DC] " .. text .. "|r")
+end
+
+-- One shared timer for the "we are in an instance, catch the server up" sync:
+-- ask for the boss list and re-apply this player's saved overrides (the server
+-- keeps them only in memory keyed to the leader tank, so they must be pushed
+-- again each time we enter or the tank changes). The delay lets the party
+-- finish loading server-side. Scheduling again while it is pending just
+-- restarts the wait, so the burst of events a zone-in raises costs one sync.
+local INSTANCE_SYNC_DELAY = 3.0
+local instanceSyncElapsed = 0
+local instanceSyncFrame = CreateFrame("Frame")
+instanceSyncFrame:Hide()
+instanceSyncFrame:SetScript("OnUpdate", function(self, elap)
+    instanceSyncElapsed = instanceSyncElapsed + elap
+    if instanceSyncElapsed < INSTANCE_SYNC_DELAY then return end
+    self:Hide()
+    RequestBossList()
+    if PushSettings then PushSettings() end
+end)
+local function ScheduleInstanceSync()
+    instanceSyncElapsed = 0
+    instanceSyncFrame:Show()
+end
+
+-- Group size as of the last roster event. The roster events also fire for
+-- changes that are not a join or a leave, and only those can bring in a tank.
+local lastGroupSize = -1
+local function GroupSize()
+    local n = GetNumRaidMembers() or 0
+    if n == 0 then n = GetNumPartyMembers() or 0 end
+    return n
+end
 
 -- Addon Messages parsing
 local function OnAddonMessage(prefix, message, channel, sender)
@@ -1626,16 +1705,33 @@ local function OnAddonMessage(prefix, message, channel, sender)
         local chatMsg = parts[2] or ""
         DEFAULT_CHAT_FRAME:AddMessage("|cff3da6ff[DC] " .. chatMsg .. "|r")
     elseif parts[1] == "ERROR" then
-        -- The only error the server hook raises is "no tank bot found", which
-        -- our background status/boss polls provoke constantly whenever the tank
-        -- bot isn't in the instance with us. While DC is OFF that's expected and
-        -- says nothing useful, so it must never reach chat — printing it spammed
-        -- the player on every poll. We only act on it during a live clear: if we
-        -- still think DC is active, the tank left mid-run, so revert to OFF
-        -- (one-shot, since this flips isDCOn false) and say so once.
-        if isDCOn then
-            UpdateStatusUI("0", nil, "off", nil)
-            DEFAULT_CHAT_FRAME:AddMessage("|cffff3333[DC] Tank bot is no longer in the group \226\128\148 dungeon clear turned off.|r")
+        local reason = parts[2] or ""
+        if string.find(reason, "^No tank bot found") then
+            -- Our background status/boss polls provoke this constantly whenever
+            -- the tank bot isn't in the instance with us, so on its own it must
+            -- never reach chat. It means something in two cases only: a live
+            -- clear lost its tank (revert to OFF, one-shot since this flips
+            -- isDCOn false), or the player just pressed a button and is waiting
+            -- to hear why nothing happened.
+            if isDCOn then
+                -- Keep the pull preference: this status carries none, and nil
+                -- would snap the readout back to Dynamic.
+                UpdateStatusUI("0", nil, "off", nil, nil, pullSetting, 0)
+                PrintError("Tank bot is no longer in the group \226\128\148 dungeon clear turned off.")
+            elseif (GetTime() - lastUserCmdAt) <= USER_REPLY_WINDOW then
+                PrintError(reason)
+            end
+        else
+            -- Every other error is a refusal with its own reason (a spectate
+            -- that could not start, a rejected setting, the module switched off
+            -- server-side). None of them say anything about the run, so the
+            -- status readout is left alone. Shown only as the answer to a
+            -- button press: a server with the module disabled answers every
+            -- background poll with one too.
+            local wasCamera = OnCameraRefused(reason)
+            if reason ~= "" and (wasCamera or (GetTime() - lastUserCmdAt) <= USER_REPLY_WINDOW) then
+                PrintError(reason)
+            end
         end
     end
 end
@@ -1679,7 +1775,18 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
     elseif event == "CHAT_MSG_ADDON" then
         local prefix, message, channel, sender = ...
         OnAddonMessage(prefix, message, channel, sender)
-    elseif event == "ZONE_CHANGED_NEW_AREA" or event == "PLAYER_ENTERING_WORLD" or event == "GROUP_ROSTER_UPDATE" then
+    elseif event == "PARTY_MEMBERS_CHANGED" or event == "RAID_ROSTER_UPDATE" then
+        -- A tank bot invited after we are already inside has had neither the
+        -- boss-list request nor our saved overrides; sync again.
+        local size = GroupSize()
+        if size ~= lastGroupSize then
+            lastGroupSize = size
+            local inInstance, instanceType = IsInInstance()
+            if inInstance and (instanceType == "party" or instanceType == "raid") then
+                ScheduleInstanceSync()
+            end
+        end
+    elseif event == "ZONE_CHANGED_NEW_AREA" or event == "PLAYER_ENTERING_WORLD" then
         local inInstance, instanceType = IsInInstance()
 
         -- Did we cross into a *different* instance since the list was built? If
@@ -1699,21 +1806,8 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
         end
 
         if inInstance and (instanceType == "party" or instanceType == "raid") then
-            -- Auto-query bosses list when entering dungeon/raid
-            -- Small delay to ensure party is fully loaded on the server
-            local delayFrame = CreateFrame("Frame")
-            local delayElapsed = 0
-            delayFrame:SetScript("OnUpdate", function(sf, elap)
-                delayElapsed = delayElapsed + elap
-                if delayElapsed >= 3.0 then
-                    RequestBossList()
-                    -- Re-apply this player's saved overrides for the new run:
-                    -- the server keeps them only in memory keyed to the leader
-                    -- tank, so they must be pushed again each time we (re)enter.
-                    if PushSettings then PushSettings() end
-                    sf:SetScript("OnUpdate", nil)
-                end
-            end)
+            -- Auto-query the boss list and re-apply saved overrides on entry.
+            ScheduleInstanceSync()
         end
     elseif event == "PLAYER_REGEN_DISABLED" or event == "PLAYER_REGEN_ENABLED" then
         if frame:IsVisible() and isDCOn then
@@ -1725,9 +1819,7 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
         -- than the guess this could make, so it is left alone.
         if not cameraState then SetCameraState("free") end
     elseif event == "PLAYER_CONTROL_GAINED" then
-        -- The camera let go for real. Cancel a queued second toggle -- it was
-        -- meant to finish the job, and now it would only start a new camera.
-        secondToggle:Hide()
+        -- The camera let go for real.
         SetCameraState(false)
     end
 end)
@@ -1972,9 +2064,10 @@ setIntro:SetPoint("TOPLEFT", setTitle, "BOTTOMLEFT", 0, -4)
 setIntro:SetWidth(580)
 setIntro:SetJustifyH("LEFT")
 setIntro:SetText(
-    "These override the server defaults for your own dungeon runs. Changes apply " ..
-    "immediately and are saved per character. You must be in a party with a tank " ..
-    "bot for them to take effect; \"Default\" reverts a setting to the server value.")
+    "These override the server defaults for your own dungeon runs. Changes are " ..
+    "saved per character and applied every time a run starts; with a tank bot in " ..
+    "your party they also apply immediately. \"Default\" reverts a setting to " ..
+    "the server value.")
 setIntro:SetTextColor(0.6, 0.6, 0.6)
 
 -- Reset-everything-to-server-default button.
@@ -1985,6 +2078,9 @@ resetAllBtn:SetText("Reset All to Default")
 resetAllBtn:SetScript("OnClick", function()
     DungeonClearDB.settings = {}
     SendDcCommand("reset", "", true)  -- empty key = clear the whole run
+    -- Show the reverted values now. With a tank bot in the party the server's
+    -- sync follows and confirms them; without one it only answers with an error.
+    if BuildSettingsFromCache then BuildSettingsFromCache() end
 end)
 
 -- Scroll area so the panel scales to any number of settings.
@@ -2067,6 +2163,8 @@ local function CreateSettingRow(key, stype)
     row.defBtn:SetScript("OnClick", function()
         DungeonClearDB.settings[key] = nil
         SendDcCommand("reset", key, true)
+        -- Revert the row now; see the Reset All button.
+        if BuildSettingsFromCache then BuildSettingsFromCache() end
     end)
     row.defBtn:Hide()
 
@@ -2183,7 +2281,23 @@ HandleSettingsLine = function(parts)
     local stype = tonumber(parts[6])
     local overridden = (parts[7] == "1")
     if not key or value == nil or stype == nil then return end
+    local serverDefault
+    if not overridden then
+        -- The server holds no override for this key, so this is its own default.
+        serverDefault = value
+        -- It also holds none whenever there is no run to attach one to: no tank
+        -- bot on our map yet, or our saved values not pushed since the last
+        -- one. A saved override is still what the next run will use, so keep
+        -- showing it instead of letting the server default paint over it.
+        local saved = DungeonClearDB.settings[key]
+        if saved ~= nil then
+            value, overridden = saved, true
+        end
+    end
     UpsertSetting(key, value, minV, maxV, stype, overridden)
+    -- Remember the default for rendering without a sync (BuildSettingsFromCache).
+    local sc = DungeonClearDB.schema[key]
+    if sc and serverDefault ~= nil then sc.default = serverDefault end
     if not inSyncBatch then RelayoutSettings() end
 end
 
@@ -2214,22 +2328,24 @@ BuildSettingsFromCache = function()
     end
 
     -- Built-in settings first (correct defaults/ranges), preferring any cached
-    -- min/max/type from a past sync but always using the built-in default value.
+    -- min/max/type and server default from a past sync.
     for _, key in ipairs(DefaultSchemaOrder) do
         local d = DefaultSchema[key]
         local c = DungeonClearDB.schema[key]
+        local def = d.default
+        if c and c.default ~= nil then def = c.default end
         render(key,
             (c and c.type) or d.type,
             (c and c.min) or d.min,
             (c and c.max) or d.max,
-            d.default)
+            def)
     end
 
     -- Any extra keys a server sync advertised that aren't built in.
     for _, key in ipairs(DungeonClearDB.schemaOrder or {}) do
         local sc = DungeonClearDB.schema[key]
         if sc and sc.type and not seen[key] then
-            render(key, sc.type, sc.min, sc.max, nil)
+            render(key, sc.type, sc.min, sc.max, sc.default)
         end
     end
 
@@ -2349,10 +2465,15 @@ SlashCmdList["DUNGEONCLEAR"] = function(msg)
         -- Parse "/dc <sub> [param]" and send via addon message
         local subCmd, param = msg:match("^(%S+)%s*(.*)$")
         if subCmd then
+            -- The server reads `set` as "<key>\t<value>".
+            if subCmd == "set" then
+                param = param:gsub("^(%S+)%s+", "%1\t")
+            end
             SendDcCommand(subCmd, param)
         end
     end
 end
 
 -- Print loaded notice
-DEFAULT_CHAT_FRAME:AddMessage("|cff3da6ffDungeonClear Addon v3.1 loaded.|r Type /dc to toggle window, or see Interface > AddOns > DungeonClear.")
+DEFAULT_CHAT_FRAME:AddMessage("|cff3da6ffDungeonClear Addon v" .. (GetAddOnMetadata(AddonName, "Version") or "?") ..
+    " loaded.|r Type /dc to toggle window, or see Interface > AddOns > DungeonClear.")
