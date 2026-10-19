@@ -1,12 +1,7 @@
 # DungeonClear
 
-> ## ⚠️ The AddOns folder **must** be named `DungeonClear`
->
-> Cloning or downloading this repo gives you a folder named
-> `wow-addon-DungeonClear`. The client will **not** load it under that name —
-> the folder inside `Interface/AddOns/` has to be exactly `DungeonClear` (with
-> `DungeonClear.toc` and `DungeonClear.lua` directly inside it). Rename it after
-> copying. See [Installation](#installation) below.
+> Copy the repository’s **`DungeonClear/` subfolder** into `Interface/AddOns/`.
+> It is already named correctly; do not copy or rename the repository folder.
 
 > This is a fork of [jrad7/mod-dungeon-clear-addon](https://github.com/jrad7/mod-dungeon-clear-addon)
 > with fixes; see [Patch Notes](#patch-notes-dungeon-clear-panel-fixes).
@@ -57,14 +52,26 @@ for loot, opens doors, and recovers from stalls. With this addon you just press
 ## Installation
 
 1. Download or clone this repository.
-2. Copy the `DungeonClear` folder (with `DungeonClear.toc` and `DungeonClear.lua`
-   inside it) into your client's add-on directory:
+2. Copy the repository’s `DungeonClear/` subfolder, including all its files,
+   into your client’s add-on directory:
 
    ```
    World of Warcraft/Interface/AddOns/DungeonClear/
    ```
 
-   The folder must be named `DungeonClear`.
+   The resulting layout must be:
+
+   ```text
+   Interface/AddOns/DungeonClear/
+   ├── DungeonClear.toc
+   ├── Skin.lua
+   └── DungeonClear.lua
+   ```
+
+   Keep the folder named `DungeonClear`. Repository documentation, `tools/` and
+   `.github/` stay outside the client addon folder. When updating an older
+   installation, replace its files with the contents of this subfolder; your
+   saved settings remain in WoW’s WTF directory.
 3. Launch the client and enable **DungeonClear** on the AddOns list at the
    character-select screen (tick "Load out of date AddOns" if the client asks).
 4. Log in. You'll see `DungeonClear Addon loaded. Type /dc to toggle window.` in
@@ -84,7 +91,8 @@ Install the complete addon folder, including `Skin.lua`. This is a client-only
 change: no server module rebuild, SQL or manifest pin update is needed.
 
 Validation: Lua 5.1 syntax and the skin smoke test can run outside WoW with
-`luac -p Skin.lua DungeonClear.lua` and `lua tools/skin_smoke_test.lua`.
+`luac -p DungeonClear/Skin.lua DungeonClear/DungeonClear.lua` and
+`lua tools/skin_smoke_test.lua`, run from the repository root.
 Visual appearance and mouse interactions still require a 3.3.5a client check.
 
 ## Using it

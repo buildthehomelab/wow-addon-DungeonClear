@@ -1,4 +1,5 @@
--- Run from the addon directory with Lua 5.1.
+-- Run from the repository root with Lua 5.1. Optional argument: addon folder.
+local addonDir = arg[1] or "DungeonClear"
 local objects, calls = {}, {}
 local function object()
     local o = { shown = true, level = 1 }
@@ -18,7 +19,7 @@ function CreateFrame() return object() end
 local function loadSkin(dragon, nine)
     DragonUI, DragonUI_NineSlice, NineSliceUtils = dragon, nine, nil
     DungeonClearDB = {}
-    dofile('Skin.lua')
+    dofile(addonDir .. '/Skin.lua')
     return DungeonClearSkin
 end
 local S = loadSkin(nil, nil)
