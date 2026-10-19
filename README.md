@@ -92,10 +92,15 @@ filigree trim, and expanding restores the full skin.
 
 With DragonUI's objective tracker on, a running clear also shows at the top of the
 tracker, the way a retail dungeon block does: the dungeon name, what the tank is
-doing right now, the next boss and the pull mode. Left-click the block to open the
-full window; right-click it for Pause/Resume, Skip Boss, the pull mode and Stop
-Clearing. While the block is up, the tiny bar steps aside so the status is not
-shown twice. To keep the tiny bar instead, run
+doing right now, the next boss and the pull mode. Small icons on the block do the
+controls: pause/resume and stop at the right of the title, and the pull-mode dot
+(dark Leeroy, green Advanced, blue Dynamic) at the end of the Pull line, which
+cycles the mode on click. Outside a run, in a dungeon or raid with a group, the
+block stays as "Not clearing" with a start icon and the pull dot, so a run starts
+from the tracker. Left-click the block to open the full window; right-click it
+for the same controls plus Skip Boss as a menu. The icons need DragonUI 2.14.0 or
+later; older DragonUI shows the block with the right-click menu only. While the
+block is up, the tiny bar steps aside so the status is not shown twice. To keep the tiny bar instead, run
 `/run DungeonClearDB.trackerBlock = false` and `/reload`.
 
 Install the complete addon folder, including `Skin.lua`. This is a client-only

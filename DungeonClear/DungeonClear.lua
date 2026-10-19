@@ -421,6 +421,14 @@ local function UpdateTinyWidth()
     frame:SetWidth(math.max(170, w))
 end
 
+-- The tracker block's readout while no clear runs: the pull mode the next run will use, dimmed
+-- the way the tiny bar dims it.
+local function TrackerIdleStatus()
+    local c = PullStates[pullSetting].color
+    local dim = {c[1] * 0.6, c[2] * 0.6, c[3] * 0.6}
+    return { on = false, pull = "|cff" .. RgbToHex(dim) .. PullStates[pullSetting].seg .. "|r", pullMode = pullSetting }
+end
+
 -- Helper to update status styling
 local function UpdateStatusUI(enabled, targetName, state, stallReason, detail, pullMode, pullDec)
     isPaused = (state == "paused")
@@ -574,7 +582,7 @@ local function UpdateStatusUI(enabled, targetName, state, stallReason, detail, p
     -- The same readout for DragonUI's objective tracker block (Skin.lua).
     if Skin.Status then
         if not isDCOn then
-            Skin.Status(nil)
+            Skin.Status(TrackerIdleStatus())
         else
             local label, color = FormatStateTiny(state)
             local action = (detail and detail ~= "") and detail or label
@@ -1597,6 +1605,11 @@ end
 if Skin.BindTracker then
     Skin.BindTracker({
         send = SendDcCommand,
+        -- Same as the On button: the leader tank is elected on "on", so the overrides follow it.
+        start = function()
+            SendDcCommand("on")
+            if PushSettings then PushSettings() end
+        end,
         pullCommand = function(mode) return PullStates[mode] and PullStates[mode].cmd end,
         relayout = function() UpdateLayout() end,
         open = function()
@@ -1605,6 +1618,7 @@ if Skin.BindTracker then
             frame:Show()
         end,
     })
+    Skin.Status(TrackerIdleStatus())
 end
 
 tinyBtn:SetScript("OnClick", function()
@@ -1713,6 +1727,8 @@ instanceSyncFrame:SetScript("OnUpdate", function(self, elap)
     self:Hide()
     RequestBossList()
     if PushSettings then PushSettings() end
+    -- The tracker block shows the run (or the pull mode the next one uses) with the window closed.
+    SendDcCommand("status", "addon")
 end)
 local function ScheduleInstanceSync()
     instanceSyncElapsed = 0
@@ -1923,6 +1939,8 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
             if inInstance and (instanceType == "party" or instanceType == "raid") then
                 ScheduleInstanceSync()
             end
+            -- Joining or leaving a group brings the tracker's idle block in or out.
+            if Skin.Refresh then Skin.Refresh() end
         end
     elseif event == "ZONE_CHANGED_NEW_AREA" or event == "PLAYER_ENTERING_WORLD" then
         local inInstance, instanceType = IsInInstance()
@@ -1947,6 +1965,8 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
             -- Auto-query the boss list and re-apply saved overrides on entry.
             ScheduleInstanceSync()
         end
+        -- The tracker's idle block belongs in dungeons and raids only.
+        if Skin.Refresh then Skin.Refresh() end
     elseif event == "PLAYER_REGEN_DISABLED" or event == "PLAYER_REGEN_ENABLED" then
         if frame:IsVisible() and isDCOn then
             SendDcCommand("status", "addon")
