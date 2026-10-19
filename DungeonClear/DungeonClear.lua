@@ -523,6 +523,32 @@ local function UpdateStatusUI(enabled, targetName, state, stallReason, detail, p
     -- tri-state preference and DC's enabled gate.
     if UpdatePullControls then UpdatePullControls() end
 
+    -- The same readout for DragonUI's objective tracker block (Skin.lua).
+    if Skin.Status then
+        if not isDCOn then
+            Skin.Status(nil)
+        else
+            local label, color = FormatStateTiny(state)
+            local action = (detail and detail ~= "") and detail or label
+            if isPaused then
+                action = "Paused" .. ((detail and detail ~= "") and (": " .. detail) or "")
+            elseif (not detail or detail == "") and stallReason and stallReason ~= "" then
+                action = stallReason
+            end
+            local verdict = pullSetting == 2 and DynVerdicts[pullDecision] or nil
+            local pull = PullStates[pullSetting].seg .. (verdict and (" (" .. verdict.full .. ")") or "")
+            local pullColor = verdict and verdict.color or PullStates[pullSetting].color
+            Skin.Status({
+                on = true,
+                paused = isPaused,
+                action = "|cff" .. RgbToHex(color) .. action .. "|r",
+                boss = (targetName and targetName ~= "" and targetName ~= "None") and targetName or nil,
+                pull = "|cff" .. RgbToHex(pullColor) .. pull .. "|r",
+                pullMode = pullSetting,
+            })
+        end
+    end
+
     if DungeonClearDB.tinyMode then
         UpdateTinyWidth()
     end
@@ -1170,8 +1196,8 @@ end
 -- grey out, pending events keep the gold dash.
 local function FormatEventNote(note)
     local out = {}
-    for seg in string.gmatch(note, "[^|]+") do
-        seg = strtrim(seg)
+    for rawSeg in string.gmatch(note, "[^|]+") do
+        local seg = strtrim(rawSeg)
         if seg ~= "" then
             local piece
             if string.find(seg, "%(done%)$") then
@@ -1475,6 +1501,27 @@ UpdateLayout = function()
     end
     if UpdatePullControls then UpdatePullControls() end
     UpdateFrameHeight()
+
+    -- While DragonUI's tracker carries the status, the tiny bar steps aside: see-through and
+    -- click-through rather than hidden, so the saved open state and the status polls carry on.
+    local handoff = DungeonClearDB.tinyMode and Skin.TrackerShowing and Skin.TrackerShowing()
+    frame:SetAlpha(handoff and 0 or 1)
+    frame:EnableMouse(not handoff)
+    if tinyToggle then tinyToggle:EnableMouse(not handoff) end
+    if tinyPullToggle then tinyPullToggle:EnableMouse(not handoff) end
+end
+
+if Skin.BindTracker then
+    Skin.BindTracker({
+        send = SendDcCommand,
+        pullCommand = function(mode) return PullStates[mode] and PullStates[mode].cmd end,
+        relayout = function() UpdateLayout() end,
+        open = function()
+            DungeonClearDB.tinyMode = false
+            UpdateLayout()
+            frame:Show()
+        end,
+    })
 end
 
 tinyBtn:SetScript("OnClick", function()
@@ -1601,7 +1648,7 @@ end
 -- Addon Messages parsing
 local function OnAddonMessage(prefix, message, channel, sender)
     if prefix ~= "DC" then return end
-    
+
     local parts = {}
     local start = 1
     while true do
@@ -1615,11 +1662,10 @@ local function OnAddonMessage(prefix, message, channel, sender)
     end
 
     if parts[1] == "STATUS" then
+        -- parts[3] (next boss entry) and parts[6] (skipped count) are not shown here.
         local enabled = parts[2]
-        local nextBossEntry = parts[3]
         local nextBossName = parts[4]
         local stallReason = parts[5]
-        local skippedCount = parts[6]
         local state = parts[7]
         local detail = parts[8]
         -- Trailing field (index 9): advanced-pull toggle ("1"/"0"). Older servers
@@ -1765,7 +1811,7 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
             -- Restore layout
             frame:ClearAllPoints()
             frame:SetPoint(DungeonClearDB.point or "CENTER", UIParent, DungeonClearDB.relativePoint or "CENTER", DungeonClearDB.xOfs or 0, DungeonClearDB.yOfs or 0)
-            
+
             if UpdateLayout then
                 UpdateLayout()
             end
@@ -1775,7 +1821,7 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
             else
                 frame:Hide()
             end
-            
+
             -- WotLK addon message prefix registration (only needed/exists in 4.1+)
             if RegisterAddonMessagePrefix then
                 RegisterAddonMessagePrefix(Prefix)
@@ -2008,8 +2054,8 @@ local function QualityText(v)
     return "|c" .. info.hex .. info.name .. "|r"
 end
 
--- Setting type ids mirror DcType in the server registry.
-local DCT_BOOL, DCT_UINT, DCT_INT, DCT_FLOAT = 0, 1, 2, 3
+-- Setting type ids mirror DcType in the server registry (2 = INT, which no setting uses yet).
+local DCT_BOOL, DCT_UINT, DCT_FLOAT = 0, 1, 3
 
 -- Built-in fallback schema mirroring the server's DcSettingsRegistry. It lets
 -- the panel render controls (with correct defaults/ranges) even with no live

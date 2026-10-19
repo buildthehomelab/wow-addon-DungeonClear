@@ -85,7 +85,18 @@ Journal and RetailAH. DragonUI loads first through an optional dependency; no
 configuration is needed. Current DragonUI versions also skin settings checkboxes,
 sliders and scroll bars. The loot-quality dropdown keeps its standard control.
 Without compatible DragonUI helpers, the original DungeonClear appearance remains.
-Tiny mode keeps its compact 28-pixel bar, and expanding restores the full skin.
+Tiny mode keeps its compact 28-pixel bar, drawn as a small marble card with the
+filigree trim, and expanding restores the full skin.
+
+### Objective tracker block
+
+With DragonUI's objective tracker on, a running clear also shows at the top of the
+tracker, the way a retail dungeon block does: the dungeon name, what the tank is
+doing right now, the next boss and the pull mode. Left-click the block to open the
+full window; right-click it for Pause/Resume, Skip Boss, the pull mode and Stop
+Clearing. While the block is up, the tiny bar steps aside so the status is not
+shown twice. To keep the tiny bar instead, run
+`/run DungeonClearDB.trackerBlock = false` and `/reload`.
 
 Install the complete addon folder, including `Skin.lua`. This is a client-only
 change: no server module rebuild, SQL or manifest pin update is needed.

@@ -42,7 +42,7 @@ assert(S.enabled)
 S.Window(frame, header, close)
 assert(rawget(frame, "backdrop") == nil and calls.close == 1)
 S.Layout(true)
-assert(frame.backdrop.original)
+assert(rawget(frame, "backdrop") == nil)
 S.Layout(false)
 assert(rawget(frame, "backdrop") == nil)
 local pane = object()
@@ -62,4 +62,37 @@ S = loadSkin(D, N)
 S.CreateFrame('CheckButton', nil, frame, 'UICheckButtonTemplate')
 S.CreateFrame('ScrollFrame', nil, frame, 'FauxScrollFrameTemplate')
 assert(calls.oldCheck == 1 and calls.oldScroll == 1)
-print('Skin smoke test passed: absent, incomplete, current and legacy DragonUI; tiny/full transitions.')
+-- Tracker block: absent tracker never claims the status; an enabled one lists it first.
+function GetRealZoneText() return 'Blackrock Depths' end
+local sent, opened, relayouts = {}, 0, 0
+local binds = { send = function(c, p) sent[#sent + 1] = c .. ':' .. tostring(p) end,
+    pullCommand = function(m) return ({ [0] = 'off', [1] = 'on', [2] = 'dynamic' })[m] end,
+    relayout = function() relayouts = relayouts + 1 end, open = function() opened = opened + 1 end }
+S.BindTracker(binds)
+S.Status({ on = true, action = 'x', pull = 'Dynamic', pullMode = 2 })
+assert(S.TrackerShowing() == false)
+local collector, refreshed = nil, 0
+D.ObjectiveTracker = { enabled = true, AddCollector = function(c) collector = c end,
+    Refresh = function() refreshed = refreshed + 1 end }
+S = loadSkin(D, N)
+S.BindTracker(binds)
+S.Status({ on = true, paused = false, action = 'Plotting', boss = 'Gerstahn', pull = 'Dynamic', pullMode = 2 })
+assert(S.TrackerShowing() and refreshed == 1 and relayouts == 1)
+local blocks = { { kind = 'quest' } }
+collector(blocks)
+assert(blocks[1].kind == 'dungeonclear' and blocks[1].title == 'Blackrock Depths' and #blocks[1].lines == 3)
+local menu = blocks[1].menu()
+menu[1].func(); menu[2].func(); menu[4].func()
+assert(sent[1] == 'pause:pause' and sent[2] == 'skip:nil' and sent[3] == 'pull:off')
+assert(menu[6].checked() == true)
+blocks[1].onClick(nil, 'LeftButton')
+assert(opened == 1)
+S.Status(nil)
+assert(not S.TrackerShowing() and relayouts == 2)
+blocks = {}
+collector(blocks)
+assert(#blocks == 0)
+DungeonClearDB.trackerBlock = false
+S.Status({ on = true, action = 'x', pull = 'y', pullMode = 0 })
+assert(not S.TrackerShowing())
+print('Skin smoke test passed: absent, incomplete, current and legacy DragonUI; tiny/full transitions; tracker block.')
