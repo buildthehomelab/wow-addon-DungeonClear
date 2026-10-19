@@ -3,6 +3,8 @@
 ## Notes: Autonomous dungeon-clearing companion for mod-dungeon-clear.
 ## Author: Jared
 ## Version: 3.6.1
+## OptionalDeps: DragonUI
 ## SavedVariables: DungeonClearDB
 
+Skin.lua
 DungeonClear.lua

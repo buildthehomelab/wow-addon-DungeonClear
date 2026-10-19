@@ -1,6 +1,9 @@
 -- DungeonClear Lua Companion Addon
 -- Drives the C++ mod-dungeon-clear module with a premium UI
 
+local Skin = DungeonClearSkin
+local CreateFrame = Skin.CreateFrame
+
 local AddonName = "DungeonClear"
 local Prefix = "DC"
 
@@ -177,6 +180,9 @@ statusFrame:SetBackdrop({
 })
 statusFrame:SetBackdropColor(0.10, 0.12, 0.16, 0.60)
 statusFrame:SetBackdropBorderColor(0.15, 0.17, 0.22, 0.8)
+
+Skin.Window(frame, header, closeBtn)
+Skin.Inset(statusFrame)
 
 -- Status fields
 local statusLabel = statusFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -694,7 +700,7 @@ ApplySpectateAvailability = function()
     if UpdateResetBtnState then UpdateResetBtnState() end
 end
 
-spectateBtn:SetScript("OnEnter", function(self)
+spectateBtn:HookScript("OnEnter", function(self)
     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
     if not spectateAvailable then
         GameTooltip:SetText("Spectator mode disabled", 1, 1, 1)
@@ -709,7 +715,7 @@ spectateBtn:SetScript("OnEnter", function(self)
         0.8, 0.8, 0.8, true)
     GameTooltip:Show()
 end)
-spectateBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+spectateBtn:HookScript("OnLeave", function() GameTooltip:Hide() end)
 
 -- Seat cycling, on the same row as Spectate. The camera can sit on ANY bot in
 -- the instance, not just the tank — watch the healer through a wipe, a DPS
@@ -724,14 +730,14 @@ spectatePrevBtn:SetScript("OnClick", function()
     SendCameraCommand("prev")
     SetCameraState("follow")  -- cycling from cold starts a follow cam too
 end)
-spectatePrevBtn:SetScript("OnEnter", function(self)
+spectatePrevBtn:HookScript("OnEnter", function(self)
     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
     GameTooltip:SetText("Previous bot", 1, 1, 1)
     GameTooltip:AddLine("Move the camera to the previous bot in the instance.",
         0.8, 0.8, 0.8, true)
     GameTooltip:Show()
 end)
-spectatePrevBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+spectatePrevBtn:HookScript("OnLeave", function() GameTooltip:Hide() end)
 
 spectateNextBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
 spectateNextBtn:SetSize(30, 24)
@@ -741,14 +747,14 @@ spectateNextBtn:SetScript("OnClick", function()
     SendCameraCommand("next")
     SetCameraState("follow")
 end)
-spectateNextBtn:SetScript("OnEnter", function(self)
+spectateNextBtn:HookScript("OnEnter", function(self)
     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
     GameTooltip:SetText("Next bot", 1, 1, 1)
     GameTooltip:AddLine("Move the camera to the next bot in the instance. " ..
         "Starts the follow cam if it isn't running.", 0.8, 0.8, 0.8, true)
     GameTooltip:Show()
 end)
-spectateNextBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+spectateNextBtn:HookScript("OnLeave", function() GameTooltip:Hide() end)
 
 -- Way back: ends whatever camera is running and returns you to your own body.
 -- It gets its own button because the exit was not discoverable -- nothing on
@@ -828,14 +834,14 @@ local function OnCameraRefused(reason)
     return true
 end
 
-spectateResetBtn:SetScript("OnEnter", function(self)
+spectateResetBtn:HookScript("OnEnter", function(self)
     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
     GameTooltip:SetText("Reset Camera", 1, 1, 1)
     GameTooltip:AddLine("Ends the spectator camera and hands control of your " ..
         "own character back to you.", 0.8, 0.8, 0.8, true)
     GameTooltip:Show()
 end)
-spectateResetBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+spectateResetBtn:HookScript("OnLeave", function() GameTooltip:Hide() end)
 
 -- Invisible click target over the tiny circle. Off -> start DC; running ->
 -- toggle pause/resume. Only shown in tiny mode (see UpdateLayout). Sits over
@@ -1042,6 +1048,7 @@ scrollContainer:SetBackdrop({
 })
 scrollContainer:SetBackdropColor(0.05, 0.05, 0.08, 0.50)
 scrollContainer:SetBackdropBorderColor(0.15, 0.17, 0.22, 0.8)
+Skin.Inset(scrollContainer)
 
 -- Uniform row height sized for the worst case: a two-line wrapped name plus a
 -- folded-event note beneath it. FauxScrollFrame requires a single fixed row
@@ -1318,6 +1325,7 @@ local tinyBtn = CreateFrame("Button", "DungeonClearTinyButton", frame, "UIPanelB
 tinyBtn:SetSize(40, 20)
 tinyBtn:SetPoint("RIGHT", closeBtn, "LEFT", 2, 0)
 tinyBtn:SetText("Tiny")
+if Skin.enabled then tinyBtn:SetFrameLevel(closeBtn:GetFrameLevel()) end
 
 local toggleBossesBtn = CreateFrame("Button", "DungeonClearToggleBossesButton", frame)
 toggleBossesBtn:SetSize(24, 24)
@@ -1399,6 +1407,7 @@ UpdateFrameHeight = function()
 end
 
 UpdateLayout = function()
+    if Skin.Layout then Skin.Layout(DungeonClearDB.tinyMode) end
     if DungeonClearDB.tinyMode then
         -- Single-line readout only: no header, no close/tiny buttons, no panels
         header:Hide()
@@ -1851,7 +1860,8 @@ optionsPanel.name = "DungeonClear"
 local optTitle = optionsPanel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
 optTitle:SetPoint("TOPLEFT", optionsPanel, "TOPLEFT", 16, -16)
 optTitle:SetText("Dungeon Clear")
-optTitle:SetTextColor(0.24, 0.60, 1.0) -- match the main window header
+if Skin.enabled then optTitle:SetTextColor(1, 0.82, 0)
+else optTitle:SetTextColor(0.24, 0.60, 1.0) end
 
 local optSubtitle = optionsPanel:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
 optSubtitle:SetPoint("TOPLEFT", optTitle, "BOTTOMLEFT", 0, -4)
@@ -2057,7 +2067,8 @@ settingsPanel.parent = optionsPanel.name  -- nests under "DungeonClear"
 local setTitle = settingsPanel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
 setTitle:SetPoint("TOPLEFT", settingsPanel, "TOPLEFT", 16, -16)
 setTitle:SetText("Dungeon Clear - Settings")
-setTitle:SetTextColor(0.24, 0.60, 1.0)
+if Skin.enabled then setTitle:SetTextColor(1, 0.82, 0)
+else setTitle:SetTextColor(0.24, 0.60, 1.0) end
 
 local setIntro = settingsPanel:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
 setIntro:SetPoint("TOPLEFT", setTitle, "BOTTOMLEFT", 0, -4)

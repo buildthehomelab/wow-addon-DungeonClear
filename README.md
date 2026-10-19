@@ -70,6 +70,23 @@ for loot, opens doors, and recovers from stalls. With this addon you just press
 4. Log in. You'll see `DungeonClear Addon loaded. Type /dc to toggle window.` in
    your chat frame.
 
+## DragonUI appearance
+
+With DragonUI enabled, DungeonClear uses its metal window border, rock background,
+recessed marble panels, red action buttons and modern close button, matching
+Journal and RetailAH. DragonUI loads first through an optional dependency; no
+configuration is needed. Current DragonUI versions also skin settings checkboxes,
+sliders and scroll bars. The loot-quality dropdown keeps its standard control.
+Without compatible DragonUI helpers, the original DungeonClear appearance remains.
+Tiny mode keeps its compact 28-pixel bar, and expanding restores the full skin.
+
+Install the complete addon folder, including `Skin.lua`. This is a client-only
+change: no server module rebuild, SQL or manifest pin update is needed.
+
+Validation: Lua 5.1 syntax and the skin smoke test can run outside WoW with
+`luac -p Skin.lua DungeonClear.lua` and `lua tools/skin_smoke_test.lua`.
+Visual appearance and mouse interactions still require a 3.3.5a client check.
+
 ## Using it
 
 Type **`/dc`** to open or close the panel. You need to be **in a party with a
