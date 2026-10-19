@@ -204,6 +204,9 @@ local function ApplyStockBackdrop(tiny)
         frame:SetBackdropColor(bg.r, bg.g, bg.b)
     else
         frame:SetBackdrop(DIALOG_BACKDROP)
+        -- Undo the tooltip tint in case SetBackdrop keeps the old colours.
+        frame:SetBackdropColor(1, 1, 1, 1)
+        frame:SetBackdropBorderColor(1, 1, 1, 1)
     end
 end
 
@@ -1197,6 +1200,11 @@ for i = 1, VISIBLE_ROWS do
     row.goBtn:SetSize(46, 20)
     row.goBtn:SetPoint("RIGHT", row, "RIGHT", -6, 0)
     row.goBtn:SetText("Go")
+    -- The row stays lit while the cursor is on Go; drop it once Go is left
+    -- for somewhere off the row.
+    row.goBtn:HookScript("OnLeave", function()
+        if row.hl and not MouseIsOver(row) then row.hl:Hide() end
+    end)
 
     -- Hovering a row with a folded event shows the full note in a tooltip, so a
     -- name too long for the bottom band (which truncates) is still readable.
@@ -1216,7 +1224,8 @@ for i = 1, VISIBLE_ROWS do
         GameTooltip:Show()
     end)
     row:SetScript("OnLeave", function(self)
-        if self.hl then self.hl:Hide() end
+        -- Moving onto the Go button leaves the row; keep it lit (Go clears it).
+        if self.hl and not MouseIsOver(self) then self.hl:Hide() end
         GameTooltip:Hide()
     end)
     -- EnableMouse swallows the wheel, so forward it to keep the list scrollable
@@ -2271,7 +2280,7 @@ local function CreateSettingRow(key, stype)
     row.label = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     row.label:SetPoint("TOPLEFT", row, "TOPLEFT", 4, -2)
     row.label:SetText(meta.label or key)
-    row.label:SetTextColor(0.92, 0.92, 0.92)
+    DragonTint(row.label, 0.92, 0.92, 0.92)
 
     if meta.desc then
         row:EnableMouse(true)
