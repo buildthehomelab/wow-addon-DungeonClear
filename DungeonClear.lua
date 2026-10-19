@@ -700,7 +700,7 @@ ApplySpectateAvailability = function()
     if UpdateResetBtnState then UpdateResetBtnState() end
 end
 
-spectateBtn:SetScript("OnEnter", function(self)
+spectateBtn:HookScript("OnEnter", function(self)
     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
     if not spectateAvailable then
         GameTooltip:SetText("Spectator mode disabled", 1, 1, 1)
@@ -715,7 +715,7 @@ spectateBtn:SetScript("OnEnter", function(self)
         0.8, 0.8, 0.8, true)
     GameTooltip:Show()
 end)
-spectateBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+spectateBtn:HookScript("OnLeave", function() GameTooltip:Hide() end)
 
 -- Seat cycling, on the same row as Spectate. The camera can sit on ANY bot in
 -- the instance, not just the tank — watch the healer through a wipe, a DPS
@@ -730,14 +730,14 @@ spectatePrevBtn:SetScript("OnClick", function()
     SendCameraCommand("prev")
     SetCameraState("follow")  -- cycling from cold starts a follow cam too
 end)
-spectatePrevBtn:SetScript("OnEnter", function(self)
+spectatePrevBtn:HookScript("OnEnter", function(self)
     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
     GameTooltip:SetText("Previous bot", 1, 1, 1)
     GameTooltip:AddLine("Move the camera to the previous bot in the instance.",
         0.8, 0.8, 0.8, true)
     GameTooltip:Show()
 end)
-spectatePrevBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+spectatePrevBtn:HookScript("OnLeave", function() GameTooltip:Hide() end)
 
 spectateNextBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
 spectateNextBtn:SetSize(30, 24)
@@ -747,14 +747,14 @@ spectateNextBtn:SetScript("OnClick", function()
     SendCameraCommand("next")
     SetCameraState("follow")
 end)
-spectateNextBtn:SetScript("OnEnter", function(self)
+spectateNextBtn:HookScript("OnEnter", function(self)
     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
     GameTooltip:SetText("Next bot", 1, 1, 1)
     GameTooltip:AddLine("Move the camera to the next bot in the instance. " ..
         "Starts the follow cam if it isn't running.", 0.8, 0.8, 0.8, true)
     GameTooltip:Show()
 end)
-spectateNextBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+spectateNextBtn:HookScript("OnLeave", function() GameTooltip:Hide() end)
 
 -- Way back: ends whatever camera is running and returns you to your own body.
 -- It gets its own button because the exit was not discoverable -- nothing on
@@ -834,14 +834,14 @@ local function OnCameraRefused(reason)
     return true
 end
 
-spectateResetBtn:SetScript("OnEnter", function(self)
+spectateResetBtn:HookScript("OnEnter", function(self)
     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
     GameTooltip:SetText("Reset Camera", 1, 1, 1)
     GameTooltip:AddLine("Ends the spectator camera and hands control of your " ..
         "own character back to you.", 0.8, 0.8, 0.8, true)
     GameTooltip:Show()
 end)
-spectateResetBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+spectateResetBtn:HookScript("OnLeave", function() GameTooltip:Hide() end)
 
 -- Invisible click target over the tiny circle. Off -> start DC; running ->
 -- toggle pause/resume. Only shown in tiny mode (see UpdateLayout). Sits over
@@ -1325,6 +1325,7 @@ local tinyBtn = CreateFrame("Button", "DungeonClearTinyButton", frame, "UIPanelB
 tinyBtn:SetSize(40, 20)
 tinyBtn:SetPoint("RIGHT", closeBtn, "LEFT", 2, 0)
 tinyBtn:SetText("Tiny")
+if Skin.enabled then tinyBtn:SetFrameLevel(closeBtn:GetFrameLevel()) end
 
 local toggleBossesBtn = CreateFrame("Button", "DungeonClearToggleBossesButton", frame)
 toggleBossesBtn:SetSize(24, 24)
