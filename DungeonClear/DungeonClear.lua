@@ -114,9 +114,42 @@ local PushSettings              -- re-send saved overrides to the server
 local BuildSettingsFromCache    -- render rows from the cached schema at load
 
 
+-- Without DragonUI the window wears stock Blizzard art: the dialog-box frame and
+-- header plate, options-box insets, and the tooltip frame on the tiny bar (the
+-- dialog border is too thick for 28px). The dialog border is ~12px against the
+-- tooltip border's 4, so that window is wider and keeps more bottom padding.
+-- DragonUI's skin (Skin.lua) replaces all of it and keeps the original metrics.
+local FRAME_W = Skin.enabled and 330 or 346
+local BOTTOM_PAD = Skin.enabled and 12 or 20
+local DIALOG_BACKDROP = {
+    bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
+    edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+    tile = true, tileSize = 32, edgeSize = 32,
+    insets = { left = 11, right = 12, top = 12, bottom = 11 }
+}
+local TOOLTIP_BACKDROP = {
+    bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+    edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+    tile = true, tileSize = 16, edgeSize = 16,
+    insets = { left = 5, right = 5, top = 5, bottom = 5 }
+}
+
+-- Options-box look (Interface Options panels) for the status and boss-list insets.
+local function OptionsBox(f)
+    f:SetBackdrop(TOOLTIP_BACKDROP)
+    f:SetBackdropColor(0.1, 0.1, 0.1)
+    f:SetBackdropBorderColor(0.4, 0.4, 0.4)
+end
+
+-- Text tints that belong to the DragonUI look only; the stock look keeps each
+-- font's own colour (GameFontNormal gold, GameFontHighlight white).
+local function DragonTint(fs, r, g, b)
+    if Skin.enabled then fs:SetTextColor(r, g, b) end
+end
+
 -- UI Frame Creation
 local frame = CreateFrame("Frame", "DungeonClearFrame", UIParent)
-frame:SetSize(330, 420)
+frame:SetSize(FRAME_W, 420)
 frame:SetMovable(true)
 frame:EnableMouse(true)
 frame:RegisterForDrag("LeftButton")
@@ -139,21 +172,43 @@ frame:SetScript("OnMouseUp", function(self, button)
     end
 end)
 
--- Sleek Dark Backdrop
-frame:SetBackdrop({
-    bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
-    edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-    tile = true, tileSize = 16, edgeSize = 16,
-    insets = { left = 4, right = 4, top = 4, bottom = 4 }
-})
-frame:SetBackdropColor(0.03, 0.03, 0.05, 0.90)
-frame:SetBackdropBorderColor(0.20, 0.22, 0.28, 1.0)
+-- Stock dialog frame; UpdateLayout swaps in the tooltip frame for the tiny bar.
+frame:SetBackdrop(DIALOG_BACKDROP)
 
--- Header Text
-local header = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-header:SetPoint("TOP", frame, "TOP", 0, -12)
+-- Header plate + title, laid out like the Game Menu's. DragonUI draws its own
+-- title bar (Skin.Window hides this header), so the plate is stock-only.
+local headerPlate
+if not Skin.enabled then
+    headerPlate = frame:CreateTexture(nil, "ARTWORK")
+    headerPlate:SetTexture("Interface\\DialogFrame\\UI-DialogBox-Header")
+    headerPlate:SetSize(256, 64)
+    headerPlate:SetPoint("TOP", frame, "TOP", 0, 12)
+end
+local header = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+if headerPlate then
+    header:SetPoint("TOP", headerPlate, "TOP", 0, -14)
+else
+    header:SetPoint("TOP", frame, "TOP", 0, -12)
+end
 header:SetText("Dungeon Clear")
-header:SetTextColor(0.24, 0.60, 1.0) -- Premium blue
+
+local tinyBackdrop
+local function ApplyStockBackdrop(tiny)
+    if Skin.enabled or tinyBackdrop == tiny then return end
+    tinyBackdrop = tiny
+    if tiny then
+        frame:SetBackdrop(TOOLTIP_BACKDROP)
+        local border = TOOLTIP_DEFAULT_COLOR or { r = 1, g = 1, b = 1 }
+        local bg = TOOLTIP_DEFAULT_BACKGROUND_COLOR or { r = 0.09, g = 0.09, b = 0.19 }
+        frame:SetBackdropBorderColor(border.r, border.g, border.b)
+        frame:SetBackdropColor(bg.r, bg.g, bg.b)
+    else
+        frame:SetBackdrop(DIALOG_BACKDROP)
+        -- Undo the tooltip tint in case SetBackdrop keeps the old colours.
+        frame:SetBackdropColor(1, 1, 1, 1)
+        frame:SetBackdropBorderColor(1, 1, 1, 1)
+    end
+end
 
 -- Close Button
 local closeBtn = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
@@ -162,7 +217,7 @@ closeBtn:SetScript("OnClick", function()
     frame:Hide()
 end)
 
--- Status Info Subframe (Glassmorphism effect)
+-- Status Info Subframe (options-box inset)
 -- Base height with the Warning row hidden. When a warning is showing the box
 -- grows by STALL_GAP plus however tall the wrapped warning actually came out
 -- (see StallRowHeight) -- it is free text from the server, so no fixed reserve
@@ -172,14 +227,7 @@ local STALL_GAP = 8
 local statusFrame = CreateFrame("Frame", nil, frame)
 statusFrame:SetSize(306, STATUS_H)
 statusFrame:SetPoint("TOP", frame, "TOP", 0, -35)
-statusFrame:SetBackdrop({
-    bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
-    edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-    tile = true, tileSize = 12, edgeSize = 12,
-    insets = { left = 3, right = 3, top = 3, bottom = 3 }
-})
-statusFrame:SetBackdropColor(0.10, 0.12, 0.16, 0.60)
-statusFrame:SetBackdropBorderColor(0.15, 0.17, 0.22, 0.8)
+OptionsBox(statusFrame)
 
 Skin.Window(frame, header, closeBtn)
 Skin.Inset(statusFrame)
@@ -188,7 +236,7 @@ Skin.Inset(statusFrame)
 local statusLabel = statusFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 statusLabel:SetPoint("TOPLEFT", statusFrame, "TOPLEFT", 10, -10)
 statusLabel:SetText("Mode Status:")
-statusLabel:SetTextColor(0.8, 0.8, 0.8)
+DragonTint(statusLabel, 0.8, 0.8, 0.8)
 
 local statusVal = statusFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 statusVal:SetPoint("LEFT", statusLabel, "RIGHT", 5, 0)
@@ -201,7 +249,7 @@ statusVal:SetTextColor(0.5, 0.5, 0.5)
 local pullModeLabel = statusFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 pullModeLabel:SetPoint("TOPLEFT", statusLabel, "BOTTOMLEFT", 0, -8)
 pullModeLabel:SetText("Pull Mode:")
-pullModeLabel:SetTextColor(0.8, 0.8, 0.8)
+DragonTint(pullModeLabel, 0.8, 0.8, 0.8)
 
 local pullModeVal = statusFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 pullModeVal:SetPoint("LEFT", pullModeLabel, "RIGHT", 5, 0)
@@ -211,7 +259,7 @@ pullModeVal:SetTextColor(0.6, 0.6, 0.6)
 local stateLabel = statusFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 stateLabel:SetPoint("TOPLEFT", pullModeLabel, "BOTTOMLEFT", 0, -8)
 stateLabel:SetText("Current State:")
-stateLabel:SetTextColor(0.8, 0.8, 0.8)
+DragonTint(stateLabel, 0.8, 0.8, 0.8)
 
 local stateVal = statusFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 -- Anchor TOPLEFT (not LEFT) so a wrapped second line grows downward instead of
@@ -233,7 +281,7 @@ detailVal:SetPoint("TOPLEFT", stateLabel, "BOTTOMLEFT", 0, -2)
 -- right edge before the 3px border inset was even counted.
 detailVal:SetWidth(286)
 detailVal:SetJustifyH("LEFT")
-detailVal:SetTextColor(0.7, 0.7, 0.7)
+DragonTint(detailVal, 0.7, 0.7, 0.7)
 detailVal:SetText("")
 
 local targetLabel = statusFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -245,7 +293,7 @@ local targetLabel = statusFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal
 -- statusFrame / frame height bumps) so no new overlap is introduced.
 targetLabel:SetPoint("TOPLEFT", stateLabel, "BOTTOMLEFT", 0, -44)
 targetLabel:SetText("Next Boss:")
-targetLabel:SetTextColor(0.8, 0.8, 0.8)
+DragonTint(targetLabel, 0.8, 0.8, 0.8)
 
 local targetVal = statusFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 targetVal:SetPoint("LEFT", targetLabel, "RIGHT", 5, 0)
@@ -654,7 +702,7 @@ end)
 pullLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 pullLabel:SetPoint("TOPLEFT", onBtn, "BOTTOMLEFT", 2, -14)
 pullLabel:SetText("Pull:")
-pullLabel:SetTextColor(0.8, 0.8, 0.8)
+DragonTint(pullLabel, 0.8, 0.8, 0.8)
 
 local PULL_SEG_W = 86
 for i = 0, 2 do
@@ -1060,20 +1108,13 @@ local listLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 -- segment row + 8px gap + 24px spectate row + 12px.
 listLabel:SetPoint("TOPLEFT", onBtn, "BOTTOMLEFT", 0, -76)
 listLabel:SetText("Dungeon Bosses")
-listLabel:SetTextColor(0.24, 0.60, 1.0)
+DragonTint(listLabel, 0.24, 0.60, 1.0)
 
 -- Boss List Scroll Frame container
 local scrollContainer = CreateFrame("Frame", nil, frame)
 scrollContainer:SetSize(306, 205)
 scrollContainer:SetPoint("TOPLEFT", listLabel, "BOTTOMLEFT", 0, -4)
-scrollContainer:SetBackdrop({
-    bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
-    edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-    tile = true, tileSize = 12, edgeSize = 12,
-    insets = { left = 3, right = 3, top = 3, bottom = 3 }
-})
-scrollContainer:SetBackdropColor(0.05, 0.05, 0.08, 0.50)
-scrollContainer:SetBackdropBorderColor(0.15, 0.17, 0.22, 0.8)
+OptionsBox(scrollContainer)
 Skin.Inset(scrollContainer)
 
 -- Uniform row height sized for the worst case: a two-line wrapped name plus a
@@ -1113,11 +1154,21 @@ for i = 1, VISIBLE_ROWS do
     row:SetSize(ROW_W, ROW_HEIGHT - 2)
     row:SetPoint("TOPLEFT", scrollFrame, "TOPLEFT", 0, -(i - 1) * ROW_HEIGHT)
 
-    -- Custom solid color texture instead of SetBackdrop to prevent client crashes
-    local bg = row:CreateTexture(nil, "BACKGROUND")
-    bg:SetAllPoints(row)
-    bg:SetTexture(0.08, 0.10, 0.15, 0.4)
-    row.bg = bg
+    if Skin.enabled then
+        -- Custom solid color texture instead of SetBackdrop to prevent client crashes
+        local bg = row:CreateTexture(nil, "BACKGROUND")
+        bg:SetAllPoints(row)
+        bg:SetTexture(0.08, 0.10, 0.15, 0.4)
+        row.bg = bg
+    else
+        -- Stock rows have no fill; hover lights the row like a quest log title.
+        local hl = row:CreateTexture(nil, "BACKGROUND")
+        hl:SetAllPoints(row)
+        hl:SetTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight")
+        hl:SetBlendMode("ADD")
+        hl:Hide()
+        row.hl = hl
+    end
 
     -- Text label
     row.text = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
@@ -1149,12 +1200,18 @@ for i = 1, VISIBLE_ROWS do
     row.goBtn:SetSize(46, 20)
     row.goBtn:SetPoint("RIGHT", row, "RIGHT", -6, 0)
     row.goBtn:SetText("Go")
+    -- The row stays lit while the cursor is on Go; drop it once Go is left
+    -- for somewhere off the row.
+    row.goBtn:HookScript("OnLeave", function()
+        if row.hl and not MouseIsOver(row) then row.hl:Hide() end
+    end)
 
     -- Hovering a row with a folded event shows the full note in a tooltip, so a
     -- name too long for the bottom band (which truncates) is still readable.
     -- RedrawBossList stashes the boss name + raw note on the row each draw.
     row:EnableMouse(true)
     row:SetScript("OnEnter", function(self)
+        if self.hl then self.hl:Show() end
         if not self.eventNoteFull or self.eventNoteFull == "" then return end
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
         if self.bossName then
@@ -1166,7 +1223,11 @@ for i = 1, VISIBLE_ROWS do
         end
         GameTooltip:Show()
     end)
-    row:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    row:SetScript("OnLeave", function(self)
+        -- Moving onto the Go button leaves the row; keep it lit (Go clears it).
+        if self.hl and not MouseIsOver(self) then self.hl:Hide() end
+        GameTooltip:Hide()
+    end)
     -- EnableMouse swallows the wheel, so forward it to keep the list scrollable
     -- while the cursor is over a row.
     row:EnableMouseWheel(true)
@@ -1353,16 +1414,34 @@ tinyBtn:SetPoint("RIGHT", closeBtn, "LEFT", 2, 0)
 tinyBtn:SetText("Tiny")
 if Skin.enabled then tinyBtn:SetFrameLevel(closeBtn:GetFrameLevel()) end
 
+-- Fold toggle for the boss list: the stock +/- button, or the bracket text the
+-- DragonUI look keeps.
 local toggleBossesBtn = CreateFrame("Button", "DungeonClearToggleBossesButton", frame)
-toggleBossesBtn:SetSize(24, 24)
 toggleBossesBtn:SetPoint("LEFT", listLabel, "RIGHT", 6, 0)
-toggleBossesBtn:SetNormalFontObject("GameFontNormal")
-toggleBossesBtn:SetHighlightFontObject("GameFontHighlight")
-toggleBossesBtn:SetText("[-]")
-local btnText = toggleBossesBtn:GetFontString()
-if btnText then
-    btnText:SetTextColor(0.24, 0.60, 1.0)
+if Skin.enabled then
+    toggleBossesBtn:SetSize(24, 24)
+    toggleBossesBtn:SetNormalFontObject("GameFontNormal")
+    toggleBossesBtn:SetHighlightFontObject("GameFontHighlight")
+    toggleBossesBtn:SetText("[-]")
+    local btnText = toggleBossesBtn:GetFontString()
+    if btnText then
+        btnText:SetTextColor(0.24, 0.60, 1.0)
+    end
+else
+    toggleBossesBtn:SetSize(16, 16)
+    toggleBossesBtn:SetHighlightTexture("Interface\\Buttons\\UI-PlusButton-Hilight", "ADD")
 end
+
+local function SetFoldToggle(folded)
+    if Skin.enabled then
+        toggleBossesBtn:SetText(folded and "[+]" or "[-]")
+        return
+    end
+    local art = "Interface\\Buttons\\UI-" .. (folded and "Plus" or "Minus") .. "Button-"
+    toggleBossesBtn:SetNormalTexture(art .. "Up")
+    toggleBossesBtn:SetPushedTexture(art .. "Down")
+end
+SetFoldToggle(false)  -- UpdateLayout applies the saved state
 
 -- Keep the window's top-left corner fixed across height changes. The frame is
 -- anchored by CENTER out of the box (and StopMovingOrSizing can leave any anchor
@@ -1399,13 +1478,14 @@ end
 --   76   onBtn bottom -> boss-list caption top (the pull row + the spectate row)
 --   +    the caption's own height
 --   4    caption -> list container, then the 205px container itself
-local LIST_GAP, LIST_PAD, LIST_H, TOGGLE_H = 76, 4, 205, 24
+local LIST_GAP, LIST_PAD, LIST_H = 76, 4, 205
+local TOGGLE_H = Skin.enabled and 24 or 16
 
 local function BelowActionRow()
     local capH = listLabel:GetHeight()
     if not capH or capH < 1 then capH = 14 end  -- not laid out yet (load time)
     if DungeonClearDB.bossesFolded then
-        -- Caption row only. The [+]/[-] button is taller than the caption and
+        -- Caption row only. The fold toggle is taller than the caption and
         -- vertically centred on it, so IT sets the lower edge, not the text.
         return LIST_GAP + math.max(capH, capH / 2 + TOGGLE_H / 2)
     end
@@ -1417,7 +1497,7 @@ UpdateFrameHeight = function()
         SetFrameHeight(28)
         UpdateTinyWidth()
     else
-        frame:SetWidth(330)
+        frame:SetWidth(FRAME_W)
         -- Summed from the real stack instead of the four hardcoded figures this
         -- replaces, which had gone stale: 540 left a 31px dead strip below the
         -- boss list, and the warning variants only added the flat 20px the
@@ -1427,16 +1507,18 @@ UpdateFrameHeight = function()
         --       Warning actually wrapped to (ApplyStatusHeight measured it)
         --   8   gap, then the 24px action row
         --   +   the stack below it (BelowActionRow)
-        --   12  bottom padding
-        SetFrameHeight(35 + statusFrame:GetHeight() + 8 + 24 + BelowActionRow() + 12)
+        --   +   bottom padding (BOTTOM_PAD: more inside the stock dialog border)
+        SetFrameHeight(35 + statusFrame:GetHeight() + 8 + 24 + BelowActionRow() + BOTTOM_PAD)
     end
 end
 
 UpdateLayout = function()
     if Skin.Layout then Skin.Layout(DungeonClearDB.tinyMode) end
+    ApplyStockBackdrop(DungeonClearDB.tinyMode and true or false)
     if DungeonClearDB.tinyMode then
         -- Single-line readout only: no header, no close/tiny buttons, no panels
         header:Hide()
+        if headerPlate then headerPlate:Hide() end
         closeBtn:Hide()
         tinyBtn:Hide()
         onBtn:Hide()
@@ -1469,6 +1551,7 @@ UpdateLayout = function()
         if tinyPullToggle then tinyPullToggle:Hide() end
 
         header:Show()
+        if headerPlate then headerPlate:Show() end
         closeBtn:Show()
         tinyBtn:Show()
         tinyBtn:SetText("Tiny")
@@ -1490,11 +1573,11 @@ UpdateLayout = function()
         statusFrame:SetPoint("TOP", frame, "TOP", 0, -35)
 
         if DungeonClearDB.bossesFolded then
-            toggleBossesBtn:SetText("[+]")
+            SetFoldToggle(true)
             scrollContainer:Hide()
 
         else
-            toggleBossesBtn:SetText("[-]")
+            SetFoldToggle(false)
             scrollContainer:Show()
 
         end
@@ -1906,13 +1989,12 @@ optionsPanel.name = "DungeonClear"
 local optTitle = optionsPanel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
 optTitle:SetPoint("TOPLEFT", optionsPanel, "TOPLEFT", 16, -16)
 optTitle:SetText("Dungeon Clear")
-if Skin.enabled then optTitle:SetTextColor(1, 0.82, 0)
-else optTitle:SetTextColor(0.24, 0.60, 1.0) end
+DragonTint(optTitle, 1, 0.82, 0)
 
 local optSubtitle = optionsPanel:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
 optSubtitle:SetPoint("TOPLEFT", optTitle, "BOTTOMLEFT", 0, -4)
 optSubtitle:SetText("Autonomous dungeon-clearing companion for mod-dungeon-clear.")
-optSubtitle:SetTextColor(0.6, 0.6, 0.6)
+DragonTint(optSubtitle, 0.6, 0.6, 0.6)
 
 local optOverview = optionsPanel:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
 optOverview:SetPoint("TOPLEFT", optSubtitle, "BOTTOMLEFT", 0, -14)
@@ -1928,7 +2010,7 @@ optOverview:SetText(
 local optCmdHeader = optionsPanel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
 optCmdHeader:SetPoint("TOPLEFT", optOverview, "BOTTOMLEFT", 0, -18)
 optCmdHeader:SetText("Commands & Controls")
-optCmdHeader:SetTextColor(0.24, 0.60, 1.0)
+DragonTint(optCmdHeader, 0.24, 0.60, 1.0)
 
 local optCmdList = optionsPanel:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
 optCmdList:SetPoint("TOPLEFT", optCmdHeader, "BOTTOMLEFT", 0, -8)
@@ -2113,8 +2195,7 @@ settingsPanel.parent = optionsPanel.name  -- nests under "DungeonClear"
 local setTitle = settingsPanel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
 setTitle:SetPoint("TOPLEFT", settingsPanel, "TOPLEFT", 16, -16)
 setTitle:SetText("Dungeon Clear - Settings")
-if Skin.enabled then setTitle:SetTextColor(1, 0.82, 0)
-else setTitle:SetTextColor(0.24, 0.60, 1.0) end
+DragonTint(setTitle, 1, 0.82, 0)
 
 local setIntro = settingsPanel:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
 setIntro:SetPoint("TOPLEFT", setTitle, "BOTTOMLEFT", 0, -4)
@@ -2125,7 +2206,7 @@ setIntro:SetText(
     "saved per character and applied every time a run starts; with a tank bot in " ..
     "your party they also apply immediately. \"Default\" reverts a setting to " ..
     "the server value.")
-setIntro:SetTextColor(0.6, 0.6, 0.6)
+DragonTint(setIntro, 0.6, 0.6, 0.6)
 
 -- Reset-everything-to-server-default button.
 local resetAllBtn = CreateFrame("Button", nil, settingsPanel, "UIPanelButtonTemplate")
@@ -2199,7 +2280,7 @@ local function CreateSettingRow(key, stype)
     row.label = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     row.label:SetPoint("TOPLEFT", row, "TOPLEFT", 4, -2)
     row.label:SetText(meta.label or key)
-    row.label:SetTextColor(0.92, 0.92, 0.92)
+    DragonTint(row.label, 0.92, 0.92, 0.92)
 
     if meta.desc then
         row:EnableMouse(true)
