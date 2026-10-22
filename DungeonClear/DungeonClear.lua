@@ -706,7 +706,8 @@ end)
 -- Off / On / Dynamic picker (replaces the old full-width toggle button). Each
 -- segment sends an explicit state so there's no client/server cycle drift; the
 -- active segment is highlighted + accent-colored by UpdatePullControls. Dynamic
--- is wired through but is a no-op stub server-side for now.
+-- (the default) lets the server choose Leeroy or Advanced for each pack; the
+-- choice it made is shown in the status line.
 pullLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 pullLabel:SetPoint("TOPLEFT", onBtn, "BOTTOMLEFT", 2, -14)
 pullLabel:SetText("Pull:")
@@ -730,7 +731,7 @@ end
 
 -- Spectate toggle on its own row: detaches the player into a free-flying
 -- camera while their character keeps running under bot AI (server-side
--- possession of an invisible dummy). Stateless label v1 — the server messages
+-- possession of an invisible dummy). The label is stateless; the server messages
 -- confirm on/off. Independent of DC on/off, but the server can disable the
 -- feature entirely (DungeonClear.SpectateEnable = 0): when it does, the SPECTATE
 -- message flips spectateAvailable false and the button greys out (see
