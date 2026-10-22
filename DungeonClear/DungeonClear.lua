@@ -1744,19 +1744,41 @@ local function GroupSize()
     return n
 end
 
+-- The server sends every DC message as party addon chat (CHAT_MSG_PARTY,
+-- LANG_ADDON) to the receivers directly, from our own name or from a bot in our
+-- group. Anyone can whisper us a "DC" addon message, though, so a message on any
+-- other channel or from anyone else is another player's and is ignored.
+local function IsSelfOrGroupMember(name)
+    if not name or name == "" then return false end
+    if name == UnitName("player") then return true end
+    local raidN = GetNumRaidMembers() or 0
+    if raidN > 0 then
+        for i = 1, raidN do
+            if UnitName("raid" .. i) == name then return true end
+        end
+        return false
+    end
+    for i = 1, (GetNumPartyMembers() or 0) do
+        if UnitName("party" .. i) == name then return true end
+    end
+    return false
+end
+
 -- Addon Messages parsing
 local function OnAddonMessage(prefix, message, channel, sender)
     if prefix ~= "DC" then return end
+    if channel ~= "PARTY" or not IsSelfOrGroupMember(sender) then return end
 
+    -- Every field ends up in chat or on the panel. The server never sends UI
+    -- escape codes, so "|" is doubled to show as written: no colour, link or
+    -- texture codes from a group member's hand-made message.
     local parts = {}
     local start = 1
     while true do
         local pos = string.find(message, "\t", start)
-        if not pos then
-            table.insert(parts, string.sub(message, start))
-            break
-        end
-        table.insert(parts, string.sub(message, start, pos - 1))
+        local field = string.sub(message, start, pos and pos - 1)
+        table.insert(parts, (string.gsub(field, "|", "||")))
+        if not pos then break end
         start = pos + 1
     end
 
@@ -2438,7 +2460,10 @@ HandleSettingsLine = function(parts)
     local maxV = tonumber(parts[5])
     local stype = tonumber(parts[6])
     local overridden = (parts[7] == "1")
+    -- Sliders need a real range: SetMinMaxValues(nil, nil) is a Lua error, and
+    -- the range is cached in SavedVariables.
     if not key or value == nil or stype == nil then return end
+    if minV == nil or maxV == nil or minV > maxV then return end
     local serverDefault
     if not overridden then
         -- The server holds no override for this key, so this is its own default.
