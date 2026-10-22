@@ -103,13 +103,7 @@ later; older DragonUI shows the block with the right-click menu only. While the
 block is up, the tiny bar steps aside so the status is not shown twice. To keep the tiny bar instead, run
 `/run DungeonClearDB.trackerBlock = false` and `/reload`.
 
-Install the complete addon folder, including `Skin.lua`. This is a client-only
-change: no server module rebuild, SQL or manifest pin update is needed.
-
-Validation: Lua 5.1 syntax and the skin smoke test can run outside WoW with
-`luac -p DungeonClear/Skin.lua DungeonClear/DungeonClear.lua` and
-`lua tools/skin_smoke_test.lua`, run from the repository root.
-Visual appearance and mouse interactions still require a 3.3.5a client check.
+The skin's appearance and mouse interactions still need a 3.3.5a client check.
 
 ## Using it
 
@@ -243,6 +237,12 @@ If you'd rather type, every button has a command:
 - **You can't drive the tank if you're playing it yourself.** Dungeon clear
   controls a tank *bot*, so the tank has to be a bot — or your own character in
   self-bot mode. See the module README.
+
+## Development
+
+`luac -p DungeonClear/*.lua` checks the syntax, `lua tools/skin_smoke_test.lua` loads the
+DragonUI skin against a stubbed API, and `lua tools/addon_message_test.lua` exercises the
+addon-message parsing.
 
 ## Patch Notes: Dungeon Clear Panel Fixes
 Category: Addons
